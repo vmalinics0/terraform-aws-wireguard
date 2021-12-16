@@ -1,18 +1,21 @@
 #!/bin/bash -v
 apt-get update -y
 DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -o Dpkg::Options::="--force-confnew"
-apt-get install -y wireguard-dkms wireguard-tools awscli
+apt-get install -y wireguard-dkms wireguard-tools awscli net-tools
 
 cat > /etc/wireguard/wg0.conf <<- EOF
 [Interface]
 Address = ${wg_server_net}
 PrivateKey = ${wg_server_private_key}
 ListenPort = ${wg_server_port}
-PostUp   = iptables -A FORWARD -i %i -j ACCEPT; iptables -A FORWARD -o %i -j ACCEPT; iptables -t nat -A POSTROUTING -o ${wg_server_interface} -j MASQUERADE
-PostDown = iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j ACCEPT; iptables -t nat -D POSTROUTING -o ${wg_server_interface} -j MASQUERADE
+PostUp   = iptables -A FORWARD -i %i -j ACCEPT; iptables -A FORWARD -o %i -j ACCEPT; iptables -t nat -A POSTROUTING -o ENI -j MASQUERADE
+PostDown = iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j ACCEPT; iptables -t nat -D POSTROUTING -o ENI -j MASQUERADE
 
 ${peers}
 EOF
+
+export ENI=$(ip route get 8.8.8.8 | grep 8.8.8.8 | awk '{print $5}')
+sed -i "s/ENI/$ENI/g" /etc/wireguard/wg0.conf
 
 # we go with the eip if it is provided
 if [ "${use_eip}" != "disabled" ]; then
